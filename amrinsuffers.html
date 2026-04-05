@@ -31,6 +31,15 @@
         @keyframes floating{0%,100%{transform:translateY(0)}50%{transform:translateY(-15px)}}
         .pop-anim{animation:popIn 0.8s cubic-bezier(0.68,-0.55,0.265,1.55) forwards}
         @keyframes popIn{0%{transform:scale(0.5);opacity:0}100%{transform:scale(1);opacity:1}}
+        @media (max-width: 768px) {
+            .title{font-size:38px !important; line-height:1.2}
+            .panel{min-width:240px; padding:25px; width:80%; max-width:350px;}
+            .btn{font-size:22px; padding:15px 25px; width:100%; box-sizing:border-box;}
+            #score-display{top:20px; right:20px; font-size:24px;}
+            #coin-counter{top:55px; right:20px; font-size:22px;}
+            #pause-btn{top:20px; left:20px; width:45px; height:45px; font-size:22px; line-height:40px;}
+            #april-fool .title {font-size:32px !important;}
+        }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
@@ -80,9 +89,9 @@
 
     <script>
         const WORLD = {
-            LANE_WIDTH: 3.5, TRACK_WIDTH: 15, VISIBLE_Z: 200, DESTROY_Z: 30, CHUNK_LENGTH: 40,
+            LANE_WIDTH: 3.5, TRACK_WIDTH: 15, VISIBLE_Z: 200, DESTROY_Z: 30, CHUNK_LENGTH: 30,
             CAMERA_HEIGHT: 11, CAMERA_Z_OFFSET: 15, PLAYER_Y: 1.0, JUMP_HEIGHT: 6.0, GRAVITY: 36,     
-            START_SPEED: 25, MAX_SPEED: 80, ACCELERATION: 0.25, POLICE_OFFSET_Z: 3.5 
+            START_SPEED: 30, MAX_SPEED: 100, ACCELERATION: 0.35, POLICE_OFFSET_Z: 3.5 
         };
 
         const COLORS = {
@@ -121,16 +130,16 @@
 
         class InputHandler {
             constructor() {
-                this.actionQueue = []; this.tsX=0; this.tsY=0; this.thr=30; this.keys = new Set();
+                this.actionQueue = []; this.tsX=0; this.tsY=0; this.thr=40; this.keys = new Set();
                 this.lastTap = 0; this.lastSpace = 0;
                 window.addEventListener('keydown', (e) => { 
-                    if(e.code==='Space') { const n = Date.now(); if(n-this.lastSpace<300) this.pushAction('HOVERBOARD'); this.lastSpace=n; }
+                    if(e.code==='Space') { const n = Date.now(); if(n-this.lastSpace<300) this.pushAction('BOARD'); this.lastSpace=n; }
                     if(this.keys.has(e.code)) return; this.keys.add(e.code); this.handleKey(e.code); 
                 });
                 window.addEventListener('keyup', (e) => this.keys.delete(e.code));
                 window.addEventListener('touchstart', (e) => { 
                     this.tsX=e.touches[0].screenX; this.tsY=e.touches[0].screenY; 
-                    const n = Date.now(); if(n-this.lastTap<300) this.pushAction('HOVERBOARD'); this.lastTap=n;
+                    const n = Date.now(); if(n-this.lastTap<300) this.pushAction('BOARD'); this.lastTap=n;
                 });
                 window.addEventListener('touchend', (e) => this.handleSwipe(this.tsX, this.tsY, e.changedTouches[0].screenX, e.changedTouches[0].screenY));
             }
@@ -220,10 +229,18 @@
                 this.group.add(this.board); this.hasBoard = false; this.boardTimer = 0;
                 this.hasMagnet = false; this.magTimer = 0;
             }
-            updateHitbox() { this.collisionBox.setFromObject(this.group).expandByVector(new THREE.Vector3(-0.25,-0.1,-0.15)); }
+            updateHitbox() { this.collisionBox.setFromObject(this.modelGroup).expandByVector(new THREE.Vector3(-0.25,-0.1,-0.15)); }
             
-            toggleBoard() { if(!this.hasBoard) { this.hasBoard=true; this.board.visible=true; this.boardTimer=20; this.particles.emit(this.group.position,20,0x00d2ff,'burst'); } }
-            breakBoard() { this.hasBoard=false; this.board.visible=false; this.particles.emit(this.group.position,30,0x00d2ff,'burst'); }
+            toggleBoard() { 
+                if(!this.hasBoard) { 
+                    this.hasBoard=true; this.board.visible=true; this.boardTimer=20; this.particles.emit(this.group.position,20,0x00d2ff,'burst'); 
+                    let p=document.createElement('div'); p.innerHTML='🛹 SKATEBOARD!'; p.style.cssText=`position:absolute;color:#00d2ff;font-size:36px;font-family:'Fredoka One';text-shadow:0 0 10px #000;left:50%;top:25%;transform:translateX(-50%);pointer-events:none;animation:popIn 0.5s forwards`; document.body.appendChild(p); setTimeout(()=>p.remove(),800);
+                } 
+            }
+            breakBoard() { 
+                this.hasBoard=false; this.board.visible=false; this.particles.emit(this.group.position,50,0x00d2ff,'burst'); 
+                let p=document.createElement('div'); p.innerHTML='💥 SAVED!'; p.style.cssText=`position:absolute;color:#ff3366;font-size:42px;font-family:'Fredoka One';text-shadow:0 0 10px #000;left:50%;top:40%;transform:translateX(-50%);pointer-events:none;animation:popIn 0.5s forwards`; document.body.appendChild(p); setTimeout(()=>p.remove(),800);
+            }
 
             jump() { if (this.state==='RUNNING') { this.state='JUMPING'; this.yVel=Math.sqrt(2*WORLD.GRAVITY*WORLD.JUMP_HEIGHT); this.particles.emit(this.group.position,10,0xffffff,'dust'); } }
             slide() { 
@@ -292,17 +309,17 @@
                 if(this.chunksSpawned <= 2) return;
 
                 // Immediately drop heavy trains starting right at chunk 3!
-                if (r < 0.15) { 
-                    this.spB(l,zPos); this.spC(l===0?1:0,zPos,5,true); // 15% single barrier
-                } else if(r < 0.40) { 
-                    [-1,0,1].forEach(x=>{if(x!==l)this.spB(x,zPos);else this.spC(x,zPos,4);}); // 25% double barrier
-                } else if(r < 0.80) { 
-                    // 40% massive train chance immediately!
-                    // Moving trains chance scales up slowly!
-                    this.spT(l,zPos,Math.random() < Math.min(0.4, (this.chunksSpawned-2) * 0.02)); 
-                    if(Math.random()<0.7) this.spC(l,zPos-5,4,4.5); 
+                if (r < 0.08) { 
+                    this.spB(l,zPos); this.spC(l===0?1:0,zPos,5,true); // 8% single barrier
+                } else if(r < 0.38) { 
+                    [-1,0,1].forEach(x=>{if(x!==l)this.spB(x,zPos);else this.spC(x,zPos,4);}); // 30% double barrier
+                } else if(r < 0.90) { 
+                    // 52% massive train chance immediately!
+                    // Moving trains chance scales up extremely fast!
+                    this.spT(l,zPos,Math.random() < Math.min(0.6, (this.chunksSpawned-2) * 0.04)); 
+                    if(Math.random()<0.8) this.spC(l,zPos-5,4,4.5); 
                 } else { 
-                    this.spO(l,zPos); this.spC(l,zPos,3,0.5); // 20% slide
+                    this.spO(l,zPos); this.spC(l,zPos,3,0.5); // 10% slide
                 }
 
                 // Randomly spawn a Magnet anywhere!
@@ -423,7 +440,11 @@
                 document.getElementById('restart-btn').addEventListener('click', ()=>this.start());
                 ['pause-btn','resume-btn'].forEach(id => document.getElementById(id).addEventListener('click', ()=>this.togglePause()));
                 document.getElementById('quit-btn').addEventListener('click', ()=>this.quitToMenu());
-                window.addEventListener('resize', () => { this.camera.aspect=window.innerWidth/window.innerHeight; this.camera.updateProjectionMatrix(); this.renderer.setSize(window.innerWidth, window.innerHeight); });
+                window.addEventListener('resize', () => { 
+                    const aspect = window.innerWidth/window.innerHeight;
+                    this.camera.aspect = aspect; this.camera.fov = aspect < 1 ? 85 : 65; 
+                    this.camera.updateProjectionMatrix(); this.renderer.setSize(window.innerWidth, window.innerHeight); 
+                });
                 document.addEventListener('visibilitychange', () => { if(document.hidden && this.state === 'PLAYING') this.togglePause(); });
                 this.animate(); this.world.reset();
             }
@@ -431,7 +452,8 @@
                 this.renderer = new THREE.WebGLRenderer({canvas: document.getElementById('gameCanvas'), antialias: true, powerPreference: "high-performance"});
                 this.renderer.setSize(window.innerWidth, window.innerHeight); this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
                 this.renderer.shadowMap.enabled = true; this.renderer.shadowMap.type = THREE.PCFSoftShadowMap; this.scene = new THREE.Scene(); this.scene.background = new THREE.Color(COLORS.SKY); this.scene.fog = new THREE.FogExp2(COLORS.FOG, 0.006); 
-                this.camera = new THREE.PerspectiveCamera(65, window.innerWidth/window.innerHeight, 0.1, 400); this.camera.position.set(0, WORLD.CAMERA_HEIGHT, WORLD.CAMERA_Z_OFFSET);
+                const asp = window.innerWidth/window.innerHeight;
+                this.camera = new THREE.PerspectiveCamera(asp < 1 ? 85 : 65, asp, 0.1, 400); this.camera.position.set(0, WORLD.CAMERA_HEIGHT, WORLD.CAMERA_Z_OFFSET);
                 this.scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 0.6));
                 const dLight = new THREE.DirectionalLight(0xffffff, 1.0); dLight.position.set(-20, 50, 20); dLight.castShadow = true;
                 dLight.shadow.mapSize.width = dLight.shadow.mapSize.height = 2048; dLight.shadow.camera.near = 0.5; dLight.shadow.camera.far = 150;
